@@ -16,7 +16,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PODCAST_DIR = join(__dirname, "podcast");
+const PODCAST_DIR = __dirname;
 const EPISODES_DIR = join(PODCAST_DIR, "episodes");
 const FEED_PATH = join(PODCAST_DIR, "feed.xml");
 

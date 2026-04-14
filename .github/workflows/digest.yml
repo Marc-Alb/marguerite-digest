@@ -1,0 +1,49 @@
+name: Daily Marketing Digest
+
+on:
+  schedule:
+    # 5h20 UTC = 7h20 Europe/Paris en heure d'ete (CEST).
+    # En heure d'hiver (CET, UTC+1), ca tombera a 6h20 Paris.
+    # Passer en "20 6 * * *" fin octobre si tu veux garder 7h20 pile.
+    - cron: '20 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Generer le texte du digest (Claude API)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/generate-digest-text.js
+
+      - name: Synthetiser l'audio + mettre a jour le feed RSS
+        env:
+          PODCAST_BASE_URL: https://marc-alb.github.io/marguerite-digest
+          PODCAST_VOICE: fr-FR-DeniseNeural
+          PODCAST_RATE: "+0%"
+        run: node generate.js --title "Digest $(date +%d-%m-%Y)" --text-file digest.txt
+
+      - name: Commit et push
+        run: |
+          git config user.email "marguerite@tandem.studio"
+          git config user.name "Marguerite (auto)"
+          git add episodes/ feed.xml episodes.json
+          if git diff --staged --quiet; then
+            echo "Rien a commiter (pas de nouveaux fichiers)."
+          else
+            git commit -m "Digest $(date +%Y-%m-%d)"
+            git push
+          fi
