@@ -5,12 +5,10 @@ import { Client as NotionClient } from "@notionhq/client";
 import Anthropic from "@anthropic-ai/sdk";
 import { writeFile } from "node:fs/promises";
 
-const NOTION_DB_ID = "33775563945080c3af3adf5947c4337a"; // Centre de documents
-
 const notion = new NotionClient({ auth: process.env.NOTION_TOKEN });
 const anthropic = new Anthropic();
 
-// --- 1. Trouver le digest le plus recent dans la DB ---
+// --- 1. Chercher la page du digest le plus recent via search API ---
 
 function getTitle(page) {
   for (const prop of Object.values(page.properties || {})) {
@@ -21,26 +19,25 @@ function getTitle(page) {
   return "";
 }
 
-// Notion API v5 : recuperer la data source de la DB avant de query
-const dbInfo = await notion.databases.retrieve({ database_id: NOTION_DB_ID });
-const dataSourceId = dbInfo.data_sources?.[0]?.id;
-if (!dataSourceId) throw new Error("Aucune data source trouvee pour la DB.");
-
-const query = await notion.dataSources.query({
-  data_source_id: dataSourceId,
-  sorts: [{ timestamp: "created_time", direction: "descending" }],
-  page_size: 20,
+const search = await notion.search({
+  query: "Digest marketing quotidien",
+  filter: { property: "object", value: "page" },
+  sort: { direction: "descending", timestamp: "last_edited_time" },
+  page_size: 10,
 });
 
-const digestPage = query.results.find((page) => {
+const candidates = search.results.filter((page) => {
   const title = getTitle(page).toLowerCase();
   return title.includes("digest") && title.includes("marketing");
 });
 
-if (!digestPage) {
-  throw new Error("Aucun digest marketing trouve dans la DB Centre de documents. Marguerite a-t-elle publie le digest hier soir ?");
+if (candidates.length === 0) {
+  throw new Error("Aucun digest marketing trouve. Verifie que la DB 'Centre de documents' est bien connectee a l'integration marguerite-digest-podcast.");
 }
 
+// Prendre le plus recent par created_time (priorite au dernier ecrit, pas au dernier modifie)
+candidates.sort((a, b) => new Date(b.created_time) - new Date(a.created_time));
+const digestPage = candidates[0];
 const digestTitle = getTitle(digestPage);
 const createdAt = new Date(digestPage.created_time);
 console.log(`[Notion] Digest trouve : "${digestTitle}" (cree le ${createdAt.toLocaleString("fr-FR")})`);
