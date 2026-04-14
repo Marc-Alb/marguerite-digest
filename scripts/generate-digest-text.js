@@ -1,41 +1,112 @@
-// Appelle l'API Anthropic pour produire le texte du digest marketing du jour.
-// Ecrit le resultat dans digest.txt a la racine.
+// Fetch le digest marketing du jour depuis Notion,
+// le fait adapter en version orale par Claude, ecrit digest.txt.
 
+import { Client as NotionClient } from "@notionhq/client";
 import Anthropic from "@anthropic-ai/sdk";
 import { writeFile } from "node:fs/promises";
 
-const client = new Anthropic();
+const NOTION_DB_ID = "33775563945080c3af3adf5947c4337a"; // Centre de documents
+
+const notion = new NotionClient({ auth: process.env.NOTION_TOKEN });
+const anthropic = new Anthropic();
+
+// --- 1. Trouver le digest le plus recent dans la DB ---
+
+function getTitle(page) {
+  for (const prop of Object.values(page.properties || {})) {
+    if (prop.type === "title") {
+      return prop.title.map((t) => t.plain_text).join("");
+    }
+  }
+  return "";
+}
+
+const query = await notion.databases.query({
+  database_id: NOTION_DB_ID,
+  sorts: [{ timestamp: "created_time", direction: "descending" }],
+  page_size: 20,
+});
+
+const digestPage = query.results.find((page) => {
+  const title = getTitle(page).toLowerCase();
+  return title.includes("digest") && title.includes("marketing");
+});
+
+if (!digestPage) {
+  throw new Error("Aucun digest marketing trouve dans la DB Centre de documents. Marguerite a-t-elle publie le digest hier soir ?");
+}
+
+const digestTitle = getTitle(digestPage);
+const createdAt = new Date(digestPage.created_time);
+console.log(`[Notion] Digest trouve : "${digestTitle}" (cree le ${createdAt.toLocaleString("fr-FR")})`);
+
+// --- 2. Extraire le texte de la page (recursif sur les blocks) ---
+
+async function extractText(blockId, depth = 0) {
+  const blocks = [];
+  let cursor;
+  do {
+    const res = await notion.blocks.children.list({ block_id: blockId, start_cursor: cursor });
+    blocks.push(...res.results);
+    cursor = res.has_more ? res.next_cursor : undefined;
+  } while (cursor);
+
+  let text = "";
+  for (const block of blocks) {
+    const type = block.type;
+    const data = block[type];
+    if (data?.rich_text) {
+      const line = data.rich_text.map((r) => r.plain_text).join("");
+      if (line.trim()) {
+        const prefix = type.startsWith("heading") ? "\n## " : "";
+        text += prefix + line + "\n";
+      }
+    }
+    if (type === "table_row" && data?.cells) {
+      text += data.cells.map((c) => c.map((r) => r.plain_text).join("")).join(" | ") + "\n";
+    }
+    if (block.has_children && type !== "child_page") {
+      text += await extractText(block.id, depth + 1);
+    }
+  }
+  return text;
+}
+
+const digestMarkdown = (await extractText(digestPage.id)).trim();
+console.log(`[Notion] Texte extrait : ${digestMarkdown.length} caracteres, ${digestMarkdown.split(/\s+/).length} mots`);
+
+// --- 3. Adapter en version orale via Claude ---
 
 const today = new Date().toLocaleDateString("fr-FR", {
   weekday: "long", day: "numeric", month: "long", year: "numeric",
 });
 
-const systemPrompt = `Tu es Marguerite, agente marketing de Tandem Studio : un studio indie de jeu video, solo dev (Marc). Ton role : produire des idees et du contenu marketing pour Tandem Studio. Ton authentique indie, jamais corporate. Francais quebecois neutre.
+const systemPrompt = `Tu es Marguerite, agente marketing de Tandem Studio. Tu produis le briefing audio matinal de Marc a partir de ton propre digest ecrit dans Notion.
 
-Garde-fous stricts :
-- Jamais d'infos confidentielles (finances, deadlines internes, code source, strategies business).
-- Jamais de marketing bullshit ni de ton artificiel.
-- Dates toujours absolues.`;
+Ta mission : transformer ce digest complet en briefing oral (2-3 minutes d'ecoute) que Marc va ecouter dans son casque.
 
-const userPrompt = `Redige le digest marketing quotidien du ${today}, au format ORAL pour etre ecoute en podcast (voix Denise, 2-3 minutes).
+Regles strictes de forme :
+- Longueur cible : 350-450 mots (2-3 minutes parle).
+- ECRITURE ORALE : pas de bullets, pas de 'premierement/deuxiemement/enfin', pas de tableaux, pas de liens, pas de listes de sources. Phrases courtes, transitions naturelles ("l'autre truc", "par ailleurs", "cote X"), ponctuation qui guide le souffle.
+- Ton : toi-meme (Marguerite), authentique indie, tutoie Marc, jamais corporate.
+- Selection : garde les 3-4 items les plus actionnables du jour (urgence Haute > Moyenne, impact Haut > Moyen). Ignore Effort/Impact faible.
+- Zappe : historique des revisions, sources consultees, synthese tabulaire finale, corrections de memoire interne, meta-notes.
+- Garde les dates absolues, noms de festivals/subreddits precis, montants.
+- Ouvre avec une phrase contextuelle courte et personnelle. Termine par une phrase de cloture motivante.
 
-Contraintes de forme :
-- Longueur : ~350 mots (2-3 minutes parle).
-- ECRITURE ORALE : pas de bullets, pas de "premierement/deuxiemement". Phrases courtes, transitions naturelles, ponctuation qui guide le souffle.
-- Structure : accroche du jour (1-2 phrases) + 3 a 5 idees marketing concretes priorisees effort/impact + 1 phrase de cloture.
-- Varier les formats d'idees : posts reseaux sociaux (Twitter/X, BlueSky, Mastodon, TikTok, YouTube Shorts), angles de contenu (devlog, behind-the-scenes, retrospective), opportunites de partenariat (streamers, newsletters, festivals indie), idees communaute (Discord, Reddit r/gamedev ou r/IndieDev), ecriture de presse, visuels.
-- Eviter la repetition inter-jours : propose des angles neufs.
+Reponds UNIQUEMENT avec le texte oral a lire. Pas de titre, pas de meta-commentaire, pas d'indications scenique. Ce texte ira directement au TTS.`;
 
-Reponds UNIQUEMENT avec le texte du digest, sans titre, sans preambule, sans meta-commentaire. Le texte sera directement lu par un TTS.`;
+const userPrompt = `Voici ton digest complet pour le ${today}. Adapte-le en briefing oral 2-3 min pour Marc.\n\n---\n\n${digestMarkdown}`;
 
-const msg = await client.messages.create({
+const msg = await anthropic.messages.create({
   model: "claude-sonnet-4-6",
-  max_tokens: 1500,
+  max_tokens: 2000,
   system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
   messages: [{ role: "user", content: userPrompt }],
 });
 
-const text = msg.content.find((b) => b.type === "text").text.trim();
-await writeFile("digest.txt", text, "utf8");
-console.log(`[OK] Digest genere : ${text.length} caracteres, ~${Math.round(text.split(/\s+/).length)} mots`);
-console.log(`[Cache] input_tokens=${msg.usage.input_tokens}, cache_creation=${msg.usage.cache_creation_input_tokens || 0}, cache_read=${msg.usage.cache_read_input_tokens || 0}`);
+const oralText = msg.content.find((b) => b.type === "text").text.trim();
+await writeFile("digest.txt", oralText, "utf8");
+
+console.log(`[OK] Digest oral ecrit : ${oralText.split(/\s+/).length} mots, ${oralText.length} caracteres`);
+console.log(`[Tokens] input=${msg.usage.input_tokens}, output=${msg.usage.output_tokens}, cache_creation=${msg.usage.cache_creation_input_tokens || 0}, cache_read=${msg.usage.cache_read_input_tokens || 0}`);

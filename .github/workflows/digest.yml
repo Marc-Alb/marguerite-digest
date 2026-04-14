@@ -24,9 +24,10 @@ jobs:
 
       - run: npm ci
 
-      - name: Generer le texte du digest (Claude API)
+      - name: Fetch digest Notion + adaptation orale (Claude API)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
         run: node scripts/generate-digest-text.js
 
       - name: Synthetiser l'audio + mettre a jour le feed RSS
