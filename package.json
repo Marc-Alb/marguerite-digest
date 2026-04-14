@@ -1,0 +1,12 @@
+{
+  "name": "marguerite-audio-digest",
+  "version": "1.0.0",
+  "description": "Digest marketing quotidien en audio (TTS Edge -> RSS podcast)",
+  "type": "module",
+  "scripts": {
+    "generate": "node --env-file=.env generate.js"
+  },
+  "dependencies": {
+    "msedge-tts": "^2.0.4"
+  }
+}
