@@ -8,6 +8,14 @@ import { writeFile } from "node:fs/promises";
 const notion = new NotionClient({ auth: process.env.NOTION_TOKEN });
 const anthropic = new Anthropic();
 
+// --- Diagnostic identite du token ---
+try {
+  const me = await notion.users.me();
+  console.log(`[DEBUG] Token identite : bot="${me.name}", workspace="${me.bot?.workspace_name}", owner_type="${me.bot?.owner?.type}"`);
+} catch (e) {
+  console.log(`[DEBUG] Impossible de lire users.me : ${e.message}`);
+}
+
 // --- 1. Chercher la page du digest le plus recent via search API ---
 
 function getTitle(page) {
