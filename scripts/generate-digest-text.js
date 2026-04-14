@@ -32,6 +32,12 @@ const candidates = search.results.filter((page) => {
 });
 
 if (candidates.length === 0) {
+  console.log("[DEBUG] Recherche 'Digest marketing quotidien' : 0 resultats. Liste complete de ce que l'integration peut voir :");
+  const all = await notion.search({ page_size: 30 });
+  console.log(`[DEBUG] ${all.results.length} objets accessibles :`);
+  for (const r of all.results.slice(0, 30)) {
+    console.log(`  - ${r.object}: "${getTitle(r) || r.title?.[0]?.plain_text || '(sans titre)'}" id=${r.id}`);
+  }
   throw new Error("Aucun digest marketing trouve. Verifie que la DB 'Centre de documents' est bien connectee a l'integration marguerite-digest-podcast.");
 }
 
