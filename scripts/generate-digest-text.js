@@ -21,8 +21,13 @@ function getTitle(page) {
   return "";
 }
 
-const query = await notion.databases.query({
-  database_id: NOTION_DB_ID,
+// Notion API v5 : recuperer la data source de la DB avant de query
+const dbInfo = await notion.databases.retrieve({ database_id: NOTION_DB_ID });
+const dataSourceId = dbInfo.data_sources?.[0]?.id;
+if (!dataSourceId) throw new Error("Aucune data source trouvee pour la DB.");
+
+const query = await notion.dataSources.query({
+  data_source_id: dataSourceId,
   sorts: [{ timestamp: "created_time", direction: "descending" }],
   page_size: 20,
 });
