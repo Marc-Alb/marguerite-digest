@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Digest Marketing — Tandem Studio</title>
+    <link>https://Marc-Alb.github.io/marguerite-digest</link>
+    <language>fr-FR</language>
+    <description>Digest marketing quotidien de Marguerite pour Tandem Studio.</description>
+    <itunes:author>Marguerite (Tandem Studio)</itunes:author>
+    <itunes:explicit>false</itunes:explicit>
+    <itunes:category text="Business"/>
+    <itunes:image href="https://Marc-Alb.github.io/marguerite-digest/cover.png"/>
+    <atom:link href="https://Marc-Alb.github.io/marguerite-digest/feed.xml" rel="self" type="application/rss+xml"/>
+    <lastBuildDate>Tue, 14 Apr 2026 16:40:16 GMT</lastBuildDate>
+    <item>
+      <title>Premier episode — test</title>
+      <description>Bonjour Marc, ceci est le premier episode du digest marketing de Marguerite. Si tu entends cette phrase sur ton iPhone, tout le pipeline fonctionne de bout en bout.</description>
+      <pubDate>Tue, 14 Apr 2026 16:40:15 GMT</pubDate>
+      <guid isPermaLink="false">2026-04-14-1840</guid>
+      <enclosure url="https://Marc-Alb.github.io/marguerite-digest/episodes/2026-04-14-1840.mp3" length="131328" type="audio/mpeg"/>
+      <itunes:duration>00:01:00</itunes:duration>
+      <itunes:explicit>false</itunes:explicit>
+    </item>
+  </channel>
+</rss>
