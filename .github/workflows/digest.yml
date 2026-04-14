@@ -46,5 +46,10 @@ jobs:
             echo "Rien a commiter (pas de nouveaux fichiers)."
           else
             git commit -m "Digest $(date +%Y-%m-%d)"
-            git push
+            # Retry push avec rebase en cas de conflit (pushes concurrents)
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push && break
+              echo "Push echoue (tentative $i/3), retry dans 3s..."
+              sleep 3
+            done
           fi
